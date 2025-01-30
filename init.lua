@@ -91,7 +91,7 @@ vim.g.mapleader = ' '
 vim.g.maplocalleader = ' '
 
 -- Set to true if you have a Nerd Font installed and selected in the terminal
-vim.g.have_nerd_font = false
+vim.g.have_nerd_font = true
 
 -- [[ Setting options ]]
 -- See `:help vim.opt`
@@ -102,7 +102,14 @@ vim.g.have_nerd_font = false
 vim.opt.number = true
 -- You can also add relative line numbers, to help with jumping.
 --  Experiment for yourself to see if you like it!
--- vim.opt.relativenumber = true
+vim.opt.relativenumber = true
+
+-- fold options (!!! important for ufo !!!)
+vim.opt.foldcolumn = '0'
+vim.opt.foldlevel = 99
+vim.opt.foldlevelstart = 99
+vim.opt.foldenable = true
+vim.opt.fillchars = [[eob: ,fold: ,foldopen:,foldsep: ,foldclose:]]
 
 -- Enable mouse mode, can be useful for resizing splits for example!
 vim.opt.mouse = 'a'
@@ -132,15 +139,22 @@ vim.opt.smartcase = true
 vim.opt.signcolumn = 'yes'
 
 -- Decrease update time
-vim.opt.updatetime = 250
+vim.opt.updatetime = 50
 
 -- Decrease mapped sequence wait time
 -- Displays which-key popup sooner
-vim.opt.timeoutlen = 300
+vim.opt.timeoutlen = 500
 
 -- Configure how new splits should be opened
 vim.opt.splitright = true
 vim.opt.splitbelow = true
+
+-- make things faster
+vim.opt.backup = false
+vim.opt.swapfile = false
+
+-- get rid of extra bottom line
+vim.opt.cmdheight = 1
 
 -- Sets how neovim will display certain whitespace characters in the editor.
 --  See `:help 'list'`
@@ -163,9 +177,10 @@ vim.opt.scrolloff = 10
 -- Clear highlights on search when pressing <Esc> in normal mode
 --  See `:help hlsearch`
 vim.keymap.set('n', '<Esc>', '<cmd>nohlsearch<CR>')
+vim.keymap.set('n', '<leader>h', '<cmd>nohlsearch<CR>')
 
 -- Diagnostic keymaps
-vim.keymap.set('n', '<leader>q', vim.diagnostic.setloclist, { desc = 'Open diagnostic [Q]uickfix list' })
+-- vim.keymap.set('n', '<leader>q', vim.diagnostic.setloclist, { desc = 'Open diagnostic [Q]uickfix list' })
 
 -- Exit terminal mode in the builtin terminal with a shortcut that is a bit easier
 -- for people to discover. Otherwise, you normally need to press <C-\><C-n>, which
@@ -190,19 +205,76 @@ vim.keymap.set('n', '<C-l>', '<C-w><C-l>', { desc = 'Move focus to the right win
 vim.keymap.set('n', '<C-j>', '<C-w><C-j>', { desc = 'Move focus to the lower window' })
 vim.keymap.set('n', '<C-k>', '<C-w><C-k>', { desc = 'Move focus to the upper window' })
 
+-- keymaps ported over from lvim config
+local opts = { noremap = true, silent = true }
+local keymap = vim.api.nvim_set_keymap
+
+-- Insert --
+keymap('i', 'jj', '<ESC>', opts)
+-- Make Shift+tab do reverse tab
+keymap('i', '<S-tab>', '<C-d>', opts)
+
+-- Visual --
+-- Move text up and down
+keymap('v', '<A-j>', ':m .+1<CR>==', opts)
+keymap('v', '<A-k>', ':m .-2<CR>==', opts)
+-- keymap("v", "p", '"_dP', opts)
+
+-- Visual Block --
+-- Move text up and down
+keymap('x', 'J', ":move '>+1<CR>gv-gv", opts)
+keymap('x', 'K', ":move '<-2<CR>gv-gv", opts)
+keymap('x', '<A-j>', ":move '>+1<CR>gv-gv", opts)
+keymap('x', '<A-k>', ":move '<-2<CR>gv-gv", opts)
+
+-- greatest remap ever
+keymap('x', '<space>p', '"_dP', opts)
+
+-- YOLO deletes
+keymap('n', '<space>d', '"_d', opts)
+keymap('v', '<space>d', '"_d', opts)
+keymap('x', '<space>d', '"_d', opts)
+
+-- save the file easier!
+keymap('n', '<leader>w', '<cmd>w!<CR>', { noremap = true, silent = true, desc = 'Save' })
+
+-- quit nvim
+keymap('n', '<leader>q', '<cmd>confirm q<CR>', { noremap = true, silent = true, desc = 'Quit' })
+
 -- [[ Basic Autocommands ]]
 --  See `:help lua-guide-autocommands`
 
 -- Highlight when yanking (copying) text
 --  Try it with `yap` in normal mode
 --  See `:help vim.highlight.on_yank()`
-vim.api.nvim_create_autocmd('TextYankPost', {
-  desc = 'Highlight when yanking (copying) text',
-  group = vim.api.nvim_create_augroup('kickstart-highlight-yank', { clear = true }),
+-- vim.api.nvim_create_autocmd('TextYankPost', {
+-- desc = 'Highlight when yanking (copying) text',
+-- group = vim.api.nvim_create_augroup('kickstart-highlight-yank', { clear = true }),
+-- callback = function()
+-- vim.highlight.on_yank()
+-- end,
+-- })
+
+local augroup = vim.api.nvim_create_augroup
+local autocmd = vim.api.nvim_create_autocmd
+
+-- make yank highlight BLAZINGLY FAST
+-- ##############################################
+
+local yank_group = augroup('HighlightYank', {})
+
+autocmd('TextYankPost', {
+  group = yank_group,
+  pattern = '*',
   callback = function()
-    vim.highlight.on_yank()
+    vim.highlight.on_yank {
+      higroup = 'IncSearch',
+      timeout = 40,
+    }
   end,
 })
+
+-- #############################################
 
 -- [[ Install `lazy.nvim` plugin manager ]]
 --    See `:help lazy.nvim.txt` or https://github.com/folke/lazy.nvim for more info
@@ -318,7 +390,8 @@ require('lazy').setup({
         { '<leader>d', group = '[D]ocument' },
         { '<leader>r', group = '[R]ename' },
         { '<leader>s', group = '[S]earch' },
-        { '<leader>w', group = '[W]orkspace' },
+        { '<leader>w', group = '[W]rite buffer' },
+        { '<leader>q', group = '[Q]uit' },
         { '<leader>t', group = '[T]oggle' },
         { '<leader>h', group = 'Git [H]unk', mode = { 'n', 'v' } },
       },
@@ -413,7 +486,7 @@ require('lazy').setup({
       vim.keymap.set('n', '<leader><leader>', builtin.buffers, { desc = '[ ] Find existing buffers' })
 
       -- Slightly advanced example of overriding default behavior and theme
-      vim.keymap.set('n', '<leader>/', function()
+      vim.keymap.set('n', '<leader>d/', function()
         -- You can pass additional configuration to Telescope to change the theme, layout, etc.
         builtin.current_buffer_fuzzy_find(require('telescope.themes').get_dropdown {
           winblend = 10,
@@ -533,7 +606,13 @@ require('lazy').setup({
 
           -- Fuzzy find all the symbols in your current workspace.
           --  Similar to document symbols, except searches over your entire project.
-          map('<leader>ws', require('telescope.builtin').lsp_dynamic_workspace_symbols, '[W]orkspace [S]ymbols')
+          -- map('<leader>ws', require('telescope.builtin').lsp_dynamic_workspace_symbols, '[W]orkspace [S]ymbols')
+
+          -- Comment out the current line
+          map('<leader>/', '<Plug>(comment_toggle_linewise_current)', 'Comment toggle current line')
+
+          -- Comment out current visual selection
+          map('<leader>/', '<Plug>(comment_toggle_linewise_visual)', 'Comment toggle current line (visual)', 'v')
 
           -- Rename the variable under your cursor.
           --  Most Language Servers support renaming across files, etc.
@@ -546,6 +625,19 @@ require('lazy').setup({
           -- WARN: This is not Goto Definition, this is Goto Declaration.
           --  For example, in C this would take you to the header.
           map('gD', vim.lsp.buf.declaration, '[G]oto [D]eclaration')
+
+          local show_diagnostics = function()
+            local float = vim.diagnostic.config().float
+
+            if float then
+              local config = type(float) == 'table' and float or {}
+              config.scope = 'line'
+
+              vim.diagnostic.open_float(config)
+            end
+          end
+
+          map('gl', show_diagnostics, 'Show line diagnostics')
 
           -- The following two autocommands are used to highlight references of the
           -- word under your cursor when your cursor rests there for a little while.
@@ -588,6 +680,10 @@ require('lazy').setup({
         end,
       })
 
+      -- custom NON-Mason lsp setups
+      local lspconfig = require 'lspconfig'
+      lspconfig.gleam.setup {}
+
       -- LSP servers and clients are able to communicate to each other what features they support.
       --  By default, Neovim doesn't support everything that is in the LSP specification.
       --  When you add nvim-cmp, luasnip, etc. Neovim now has *more* capabilities.
@@ -605,6 +701,7 @@ require('lazy').setup({
       --  - settings (table): Override the default settings passed when initializing the server.
       --        For example, to see the options for `lua_ls`, you could go to: https://luals.github.io/wiki/settings/
       local servers = {
+
         -- clangd = {},
         -- gopls = {},
         -- pyright = {},
@@ -693,7 +790,7 @@ require('lazy').setup({
           lsp_format_opt = 'fallback'
         end
         return {
-          timeout_ms = 500,
+          timeout_ms = 2000,
           lsp_format = lsp_format_opt,
         }
       end,
@@ -703,7 +800,10 @@ require('lazy').setup({
         -- python = { "isort", "black" },
         --
         -- You can use 'stop_after_first' to run the first available formatter from the list
-        -- javascript = { "prettierd", "prettier", stop_after_first = true },
+        javascript = { 'prettierd', 'prettier', stop_after_first = true },
+        typescript = { 'prettierd', 'prettier', stop_after_first = true },
+        markdown = { 'prettierd', 'prettier', stop_after_first = true },
+        html = { 'prettierd', 'prettier', stop_after_first = true },
       },
     },
   },
@@ -764,9 +864,9 @@ require('lazy').setup({
         -- No, but seriously. Please read `:help ins-completion`, it is really good!
         mapping = cmp.mapping.preset.insert {
           -- Select the [n]ext item
-          ['<C-n>'] = cmp.mapping.select_next_item(),
+          -- ['<C-n>'] = cmp.mapping.select_next_item(),
           -- Select the [p]revious item
-          ['<C-p>'] = cmp.mapping.select_prev_item(),
+          -- ['<C-p>'] = cmp.mapping.select_prev_item(),
 
           -- Scroll the documentation window [b]ack / [f]orward
           ['<C-b>'] = cmp.mapping.scroll_docs(-4),
@@ -775,13 +875,13 @@ require('lazy').setup({
           -- Accept ([y]es) the completion.
           --  This will auto-import if your LSP supports it.
           --  This will expand snippets if the LSP sent a snippet.
-          ['<C-y>'] = cmp.mapping.confirm { select = true },
+          -- ['<C-y>'] = cmp.mapping.confirm { select = true },
 
           -- If you prefer more traditional completion keymaps,
           -- you can uncomment the following lines
-          --['<CR>'] = cmp.mapping.confirm { select = true },
-          --['<Tab>'] = cmp.mapping.select_next_item(),
-          --['<S-Tab>'] = cmp.mapping.select_prev_item(),
+          ['<CR>'] = cmp.mapping.confirm { select = true },
+          ['<Tab>'] = cmp.mapping.select_next_item(),
+          ['<S-Tab>'] = cmp.mapping.select_prev_item(),
 
           -- Manually trigger a completion from nvim-cmp.
           --  Generally you don't need this, because nvim-cmp will display
@@ -830,15 +930,33 @@ require('lazy').setup({
     --
     -- If you want to see what colorschemes are already installed, you can use `:Telescope colorscheme`.
     'folke/tokyonight.nvim',
+    -- priority = 1000, -- Make sure to load this before all the other start plugins.
+    -- init = function()
+    -- Load the colorscheme here.
+    -- Like many other themes, this one has different styles, and you could load
+    -- any other, such as 'tokyonight-storm', 'tokyonight-moon', or 'tokyonight-day'.
+    -- vim.cmd.colorscheme 'tokyonight-night'
+
+    -- You can configure highlights by doing something like:
+    -- vim.cmd.hi 'Comment gui=none'
+    -- end,
+  },
+  {
+    'mcchrish/zenbones.nvim',
+    -- Optionally install Lush. Allows for more configuration or extending the colorscheme
+    -- If you don't want to install lush, make sure to set g:zenbones_compat = 1
+    -- In Vim, compat mode is turned on as Lush only works in Neovim.
+    dependencies = 'rktjmp/lush.nvim',
+
     priority = 1000, -- Make sure to load this before all the other start plugins.
     init = function()
       -- Load the colorscheme here.
       -- Like many other themes, this one has different styles, and you could load
       -- any other, such as 'tokyonight-storm', 'tokyonight-moon', or 'tokyonight-day'.
-      vim.cmd.colorscheme 'tokyonight-night'
+      vim.cmd.colorscheme 'nordbones_custom'
 
       -- You can configure highlights by doing something like:
-      vim.cmd.hi 'Comment gui=none'
+      -- vim.cmd.hi 'Comment gui=none'
     end,
   },
 
@@ -866,21 +984,31 @@ require('lazy').setup({
       -- Simple and easy statusline.
       --  You could remove this setup call if you don't like it,
       --  and try some other statusline plugin
-      local statusline = require 'mini.statusline'
+      -- local statusline = require 'mini.statusline'
       -- set use_icons to true if you have a Nerd Font
-      statusline.setup { use_icons = vim.g.have_nerd_font }
+      -- statusline.setup { use_icons = vim.g.have_nerd_font }
 
       -- You can configure sections in the statusline by overriding their
       -- default behavior. For example, here we set the section for
       -- cursor location to LINE:COLUMN
       ---@diagnostic disable-next-line: duplicate-set-field
-      statusline.section_location = function()
-        return '%2l:%-2v'
-      end
+      -- statusline.section_location = function()
+      --  return '%2l:%-2v'
+      --end
 
       -- ... and there is more!
       --  Check out: https://github.com/echasnovski/mini.nvim
     end,
+  },
+  { -- lualine instead of mini.statusline
+    'nvim-lualine/lualine.nvim',
+    dependencies = { 'nvim-tree/nvim-web-devicons' },
+  },
+  { -- comment things easier
+    'JoosepAlviste/nvim-ts-context-commentstring',
+  },
+  {
+    'numToStr/Comment.nvim',
   },
   { -- Highlight, edit, and navigate code
     'nvim-treesitter/nvim-treesitter',
@@ -896,9 +1024,9 @@ require('lazy').setup({
         -- Some languages depend on vim's regex highlighting system (such as Ruby) for indent rules.
         --  If you are experiencing weird indenting issues, add the language to
         --  the list of additional_vim_regex_highlighting and disabled languages for indent.
-        additional_vim_regex_highlighting = { 'ruby' },
+        additional_vim_regex_highlighting = { 'ruby', 'gleam' },
       },
-      indent = { enable = true, disable = { 'ruby' } },
+      indent = { enable = true, disable = { 'ruby', 'gleam' } },
     },
     -- There are additional nvim-treesitter modules that you can use to interact
     -- with nvim-treesitter. You should go explore a few and see what interests you:
@@ -906,6 +1034,10 @@ require('lazy').setup({
     --    - Incremental selection: Included, see `:help nvim-treesitter-incremental-selection-mod`
     --    - Show your current context: https://github.com/nvim-treesitter/nvim-treesitter-context
     --    - Treesitter + textobjects: https://github.com/nvim-treesitter/nvim-treesitter-textobjects
+  },
+  {
+    'kevinhwang91/nvim-ufo',
+    dependencies = 'kevinhwang91/promise-async',
   },
 
   -- The following two comments only work if you have downloaded the kickstart repo, not just copy pasted the
@@ -918,10 +1050,10 @@ require('lazy').setup({
   --  Uncomment any of the lines below to enable them (you will need to restart nvim).
   --
   -- require 'kickstart.plugins.debug',
-  -- require 'kickstart.plugins.indent_line',
-  -- require 'kickstart.plugins.lint',
-  -- require 'kickstart.plugins.autopairs',
-  -- require 'kickstart.plugins.neo-tree',
+  require 'kickstart.plugins.indent_line',
+  require 'kickstart.plugins.lint',
+  require 'kickstart.plugins.autopairs',
+  require 'kickstart.plugins.neo-tree',
   -- require 'kickstart.plugins.gitsigns', -- adds gitsigns recommend keymaps
 
   -- NOTE: The import below can automatically add your own plugins, configuration, etc from `lua/custom/plugins/*.lua`
@@ -952,5 +1084,134 @@ require('lazy').setup({
   },
 })
 
+-- **********************
+-- setup diagnostic icons
+local diagnostic_icons = require 'kickstart.icons.diagnostics'
+local default_diagnostic_config = {
+  signs = {
+    text = {
+      [vim.diagnostic.severity.ERROR] = diagnostic_icons.Error,
+      [vim.diagnostic.severity.WARN] = diagnostic_icons.Warning,
+      [vim.diagnostic.severity.HINT] = diagnostic_icons.Hint,
+      [vim.diagnostic.severity.INFO] = diagnostic_icons.Information,
+    },
+    linehl = {
+      [vim.diagnostic.severity.ERROR] = 'ErrorMsg',
+    },
+    numhl = {
+      [vim.diagnostic.severity.WARN] = 'WarningMsg',
+    },
+  },
+  virtual_text = false,
+  severity_sort = true,
+  float = {
+    focusable = true,
+    style = 'minimal',
+    border = 'rounded',
+    source = 'always',
+    header = '',
+    prefix = '',
+  },
+}
+
+vim.diagnostic.config(default_diagnostic_config)
+-- **********************
+
+-- ################################
+-- lualine setup
+require('lualine').setup()
+-- ################################
+
+-- ################################
+-- Comment setup
+local comment_opts = {
+  active = true,
+  on_config_done = nil,
+  ---Add a space b/w comment and the line
+  ---@type boolean
+  padding = true,
+
+  ---Whether cursor should stay at the
+  ---same position. Only works in NORMAL
+  ---mode mappings
+  sticky = true,
+
+  ---Lines to be ignored while comment/uncomment.
+  ---Could be a regex string or a function that returns a regex string.
+  ---Example: Use '^$' to ignore empty lines
+  ---@type string|function
+  ignore = '^$',
+
+  ---Whether to create basic (operator-pending) and extra mappings for NORMAL/VISUAL mode
+  ---@type table
+  mappings = {
+    ---operator-pending mapping
+    ---Includes `gcc`, `gcb`, `gc[count]{motion}` and `gb[count]{motion}`
+    basic = true,
+    ---Extra mapping
+    ---Includes `gco`, `gcO`, `gcA`
+    extra = true,
+  },
+
+  ---LHS of line and block comment toggle mapping in NORMAL/VISUAL mode
+  ---@type table
+  toggler = {
+    ---line-comment toggle
+    line = 'gcc',
+    ---block-comment toggle
+    block = 'gbc',
+  },
+
+  ---LHS of line and block comment operator-mode mapping in NORMAL/VISUAL mode
+  ---@type table
+  opleader = {
+    ---line-comment opfunc mapping
+    line = 'gc',
+    ---block-comment opfunc mapping
+    block = 'gb',
+  },
+
+  ---LHS of extra mappings
+  ---@type table
+  extra = {
+    ---Add comment on the line above
+    above = 'gcO',
+    ---Add comment on the line below
+    below = 'gco',
+    ---Add comment at the end of line
+    eol = 'gcA',
+  },
+
+  ---Pre-hook, called before commenting the line
+  ---@type function|nil
+  pre_hook = function(...)
+    local loaded, ts_comment = pcall(require, 'ts_context_commentstring.integrations.comment_nvim')
+    if loaded and ts_comment then
+      return ts_comment.create_pre_hook()(...)
+    end
+  end,
+
+  ---Post-hook, called after commenting is done
+  ---@type function|nil
+  post_hook = nil,
+}
+
+require('Comment').setup(comment_opts)
+-- ################################
+
+-- ################################
+-- UFO SETUP
+vim.keymap.set('n', 'zR', require('ufo').openAllFolds)
+vim.keymap.set('n', 'zM', require('ufo').closeAllFolds)
+
+require('ufo').setup {
+  open_fold_hl_timeout = 0,
+  provider_selector = function(bufnr, filetype, buftype)
+    return { 'treesitter', 'indent' }
+  end,
+}
+-- ################################
+
 -- The line beneath this is called `modeline`. See `:help modeline`
 -- vim: ts=2 sts=2 sw=2 et
+--
