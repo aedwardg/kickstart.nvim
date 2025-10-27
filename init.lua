@@ -693,6 +693,9 @@ require('lazy').setup({
       local lspconfig = require 'lspconfig'
       lspconfig.gleam.setup {}
 
+      -- don't need this anymore because I got fennel_ls working with Mason
+      -- lspconfig.fennel_ls.setup {}
+
       -- LSP servers and clients are able to communicate to each other what features they support.
       --  By default, Neovim doesn't support everything that is in the LSP specification.
       --  When you add nvim-cmp, luasnip, etc. Neovim now has *more* capabilities.
@@ -815,6 +818,7 @@ require('lazy').setup({
         markdown = { 'prettierd', 'prettier', stop_after_first = true },
         html = { 'prettierd', 'prettier', stop_after_first = true },
         json = { 'prettierd', 'prettier', stop_after_first = true },
+        fennel = { 'fnlfmt' },
       },
     },
   },
@@ -1049,6 +1053,26 @@ require('lazy').setup({
   {
     'kevinhwang91/nvim-ufo',
     dependencies = 'kevinhwang91/promise-async',
+  },
+  --fennel plugin
+  {
+    'Olical/conjure',
+    ft = { 'clojure', 'fennel' },
+    lazy = true,
+    init = function()
+      vim.g['conjure#mapping#doc_word'] = 'gk'
+    end,
+    dependencies = { 'PaterJason/cmp-conjure' },
+  },
+  {
+    'PaterJason/cmp-conjure',
+    lazy = true,
+    config = function()
+      local cmp = require 'cmp'
+      local config = cmp.get_config()
+      table.insert(config.sources, { name = 'conjure' })
+      return cmp.setup(config)
+    end,
   },
 
   -- The following two comments only work if you have downloaded the kickstart repo, not just copy pasted the
