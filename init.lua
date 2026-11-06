@@ -1247,6 +1247,11 @@ require('ufo').setup {
 }
 -- ################################
 
+-- ################################
+-- REX: lets Rex open files in this Neovim (see lua/custom/rex.lua)
+require('custom.rex').setup()
+-- ################################
+
 -- The line beneath this is called `modeline`. See `:help modeline`
 -- vim: ts=2 sts=2 sw=2 et
 --
