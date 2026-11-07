@@ -267,7 +267,7 @@ autocmd('TextYankPost', {
   group = yank_group,
   pattern = '*',
   callback = function()
-    vim.highlight.on_yank {
+    vim.hl.on_yank {
       higroup = 'IncSearch',
       timeout = 40,
     }
@@ -408,7 +408,8 @@ require('lazy').setup({
   { -- Fuzzy Finder (files, lsp, etc)
     'nvim-telescope/telescope.nvim',
     event = 'VimEnter',
-    branch = '0.1.x',
+    -- Latest release. The old 0.1.x branch breaks previews with nvim-treesitter `main`.
+    version = '*',
     dependencies = {
       'nvim-lua/plenary.nvim',
       { -- If encountering errors, see telescope-fzf-native README for installation instructions
@@ -430,9 +431,10 @@ require('lazy').setup({
       { 'nvim-tree/nvim-web-devicons', enabled = vim.g.have_nerd_font },
       {
         'nvim-telescope/telescope-live-grep-args.nvim',
-        -- This will not install any breaking changes.
-        -- For major updates, this must be adjusted manually.
-        version = '^1.0.0',
+        -- The latest release (v1.1.0) still calls vim.tbl_flatten, which Neovim 0.12
+        -- warns about; the fix is only on master so far. lazy-lock.json pins the commit.
+        -- Go back to `version = '^1.0.0'` once a release includes it.
+        branch = 'master',
       },
     },
     config = function()
@@ -536,6 +538,10 @@ require('lazy').setup({
   {
     -- Main LSP Configuration
     'neovim/nvim-lspconfig',
+    -- v2.4.0 is the last release that keeps `require('lspconfig').<server>.setup()`
+    -- (used below and by mason-lspconfig v1) without a deprecation warning, and it no
+    -- longer calls vim.lsp.start_client(), which Neovim 0.12 warns about.
+    tag = 'v2.4.0',
     dependencies = {
       -- Automatically install LSPs and related tools to stdpath for Neovim
       { 'williamboman/mason.nvim', config = true }, -- NOTE: Must be loaded before dependants
@@ -654,7 +660,7 @@ require('lazy').setup({
           --
           -- When you move your cursor, the highlights will be cleared (the second autocommand).
           local client = vim.lsp.get_client_by_id(event.data.client_id)
-          if client and client.supports_method(vim.lsp.protocol.Methods.textDocument_documentHighlight) then
+          if client and client:supports_method('textDocument/documentHighlight', event.buf) then
             local highlight_augroup = vim.api.nvim_create_augroup('kickstart-lsp-highlight', { clear = false })
             vim.api.nvim_create_autocmd({ 'CursorHold', 'CursorHoldI' }, {
               buffer = event.buf,
@@ -681,7 +687,7 @@ require('lazy').setup({
           -- code, if the language server you are using supports them
           --
           -- This may be unwanted, since they displace some of your code
-          if client and client.supports_method(vim.lsp.protocol.Methods.textDocument_inlayHint) then
+          if client and client:supports_method('textDocument/inlayHint', event.buf) then
             map('<leader>th', function()
               vim.lsp.inlay_hint.enable(not vim.lsp.inlay_hint.is_enabled { bufnr = event.buf })
             end, '[T]oggle Inlay [H]ints')
@@ -1027,26 +1033,108 @@ require('lazy').setup({
   },
   { -- Highlight, edit, and navigate code
     'nvim-treesitter/nvim-treesitter',
+    -- `main` is the rewrite for Neovim 0.12+. The old `master` branch is frozen
+    -- and does not support 0.12. `main` needs tree-sitter-cli 0.26.1 or later.
+    branch = 'main',
+    lazy = false, -- nvim-treesitter does not support lazy-loading
     build = ':TSUpdate',
-    main = 'nvim-treesitter.configs', -- Sets main module to use for opts
-    -- [[ Configure Treesitter ]] See `:help nvim-treesitter`
-    opts = {
-      ensure_installed = { 'bash', 'c', 'diff', 'html', 'lua', 'luadoc', 'markdown', 'markdown_inline', 'query', 'vim', 'vimdoc' },
-      -- Autoinstall languages that are not installed
-      auto_install = true,
-      highlight = {
-        enable = true,
-        -- Some languages depend on vim's regex highlighting system (such as Ruby) for indent rules.
-        --  If you are experiencing weird indenting issues, add the language to
-        --  the list of additional_vim_regex_highlighting and disabled languages for indent.
-        additional_vim_regex_highlighting = { 'ruby', 'gleam' },
-      },
-      indent = { enable = true, disable = { 'ruby', 'gleam' } },
-    },
+    -- [[ Configure Treesitter ]] See `:help nvim-treesitter-intro`
+    config = function()
+      local ts = require 'nvim-treesitter'
+
+      -- The parsers installed before the move to `main`, so none go missing.
+      -- Others still install on first use (see the FileType autocmd below).
+      ts.install {
+        'bash',
+        'c',
+        'css',
+        'csv',
+        'diff',
+        'dockerfile',
+        'elixir',
+        'embedded_template',
+        'git_rebase',
+        'gitcommit',
+        'gitignore',
+        'go',
+        'heex',
+        'html',
+        'ini',
+        'javascript',
+        'json',
+        'lua',
+        'luadoc',
+        'markdown',
+        'markdown_inline',
+        'po',
+        'query',
+        'rbs',
+        'ruby',
+        'scss',
+        'sql',
+        'tsx',
+        'typescript',
+        'vim',
+        'vimdoc',
+        'xml',
+        'yaml',
+      }
+
+      -- Some languages depend on vim's regex highlighting system (such as Ruby) for indent rules.
+      -- For these, keep the regex syntax on beside treesitter, and keep vim's own indent.
+      local keep_regex_syntax = { ruby = true, gleam = true }
+      -- Keep vim's own indent for these. Treesitter's bash indent also indents a
+      -- heredoc's closing word, which then no longer ends the heredoc.
+      local keep_vim_indent = { ruby = true, gleam = true, bash = true }
+
+      ---@param buf integer
+      ---@param language string
+      local function treesitter_try_attach(buf, language)
+        -- The buffer might be gone by the time an install finishes
+        if not vim.api.nvim_buf_is_valid(buf) then
+          return
+        end
+        -- Check if a parser exists and load it
+        if not vim.treesitter.language.add(language) then
+          return
+        end
+        vim.treesitter.start(buf, language)
+
+        if keep_regex_syntax[language] then
+          vim.bo[buf].syntax = 'ON'
+        end
+        if not keep_vim_indent[language] and vim.treesitter.query.get(language, 'indents') ~= nil then
+          vim.bo[buf].indentexpr = "v:lua.require'nvim-treesitter'.indentexpr()"
+        end
+      end
+
+      local available_parsers = ts.get_available()
+      vim.api.nvim_create_autocmd('FileType', {
+        group = vim.api.nvim_create_augroup('custom-treesitter-attach', { clear = true }),
+        callback = function(args)
+          local buf = args.buf
+          local language = vim.treesitter.language.get_lang(args.match)
+          if not language then
+            return
+          end
+
+          if vim.tbl_contains(ts.get_installed 'parsers', language) then
+            treesitter_try_attach(buf, language)
+          elseif vim.tbl_contains(available_parsers, language) then
+            -- Autoinstall languages that are not installed, then attach
+            ts.install(language):await(function()
+              treesitter_try_attach(buf, language)
+            end)
+          else
+            -- The parser might exist even though nvim-treesitter doesn't provide it
+            treesitter_try_attach(buf, language)
+          end
+        end,
+      })
+    end,
     -- There are additional nvim-treesitter modules that you can use to interact
     -- with nvim-treesitter. You should go explore a few and see what interests you:
     --
-    --    - Incremental selection: Included, see `:help nvim-treesitter-incremental-selection-mod`
     --    - Show your current context: https://github.com/nvim-treesitter/nvim-treesitter-context
     --    - Treesitter + textobjects: https://github.com/nvim-treesitter/nvim-treesitter-textobjects
   },
